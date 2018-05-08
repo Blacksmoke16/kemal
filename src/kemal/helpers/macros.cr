@@ -96,3 +96,78 @@ end
 macro add_context_storage_type(type)
   {{ HTTP::Server::Context::STORE_MAPPINGS.push(type) }}
 end
+
+# Adds an Allow header to a response with the given methods.
+#
+# ```
+# get "/" do |env|
+#   allow %w(GET POST DELETE)
+#   {works: true}.to_json
+# end
+# ```
+# Equivalent to:
+# ```
+# get "/" do |env|
+#   env.response.headers.add("Allow", "GET, POST, DELETE")
+#   {works: true}.to_json
+# end
+# ```
+macro allow(methods)
+  env.response.headers.add("Allow", {{methods.join(", ")}})
+end
+
+# Add CORS headers based on given parameters.  Allows for easy management of CORS settings on a route by route basis.
+#
+# ```
+# get "/" do |env|
+#   cors(allow_credentials: true, allow_origin: "https://domain.com", allow_headers: %w(X-Custom-Header1 X-Custom-Header2))
+#   {works: true}.to_json
+# end
+# ```
+# Equivalent to:
+# ```
+# get "/" do |env|
+#   env.response.headers.add("Access-Control-Allow-Credentials", "true")
+#   env.response.headers.add("Access-Control-Allow-Origin", "https://domain.com")
+#   env.response.headers.add("Access-Control-Allow-Headers", "X-Custom-Header1, X-Custom-Header2")
+#   {works: true}.to_json
+# end
+# ```
+macro cors(*, allow_credentials = false, allow_origin = "*", max_age = -2, allow_headers = false, allow_methods = false, expose_headers = false, request_headers = false, request_method = "")
+  {% if allow_origin %}
+      if env.response.headers["Access-Control-Allow-Origin"]?
+         # env.response.headers["Access-Control-Allow-Origin"] += ", #{{{allow_origin}}}"
+      else
+        env.response.headers.add("Access-Control-Allow-Origin", {{allow_origin}})
+      end
+     env.response.headers.add("Access-Control-Allow-Origin", {{allow_origin}})
+    {% if allow_origin == "*" %}
+      if env.response.headers["Vary"]?
+         env.response.headers["Vary"] += ", Origin"
+      else
+        env.response.headers.add("Vary", "Origin")
+      end
+    {% end %}
+  {% end %}
+  {% if allow_headers %}
+    env.response.headers.add("Access-Control-Allow-Headers", {{allow_headers.join(", ")}})
+  {% end %}
+  {% if allow_methods %}
+    env.response.headers.add("Access-Control-Allow-Methods", {{allow_methods.join(", ")}})
+  {% end %}
+  {% if expose_headers %}
+    env.response.headers.add("Access-Control-Expose-Headers", {{expose_headers.join(", ")}})
+  {% end %}
+  {% if request_headers %}
+    env.response.headers.add("Access-Control-Request-Headers", {{request_headers.join(", ")}})
+  {% end %}
+  {% unless request_method == "" %}
+    env.response.headers.add("Access-Control-Request-Method", {{request_method}})
+  {% end %}
+  {% if allow_credentials %}
+    env.response.headers.add("Access-Control-Allow-Credentials", "true")
+  {% end %}
+  {% if max_age > -2 %}
+    env.response.headers.add("Access-Control-Max-Age", {{max_age}})
+  {% end %}
+end
